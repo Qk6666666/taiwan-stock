@@ -555,44 +555,45 @@ async function fetchNews(id,name){
 
 // ─── AI via Anthropic API ───
 async function callClaude(system,userMsg){
-  const body=JSON.stringify({
-    model:'claude-haiku-4-5-20251001',
-    max_tokens:1000,
-    system,
-    userMsg,
-  });
   const headers={'Content-Type':'application/json'};
 
-  // 優先用 Vercel 後端 API（部署後自動生效，API Key 安全存在伺服器端）
-  const isVercel = window.location.hostname !== 'localhost' &&
-                   !window.location.protocol.startsWith('file');
-  const vercelEndpoint = '/api/claude';
+  // 先嘗試 Vercel 後端 API（/api/claude）
+  try{
+    const res=await fetch('/api/claude',{
+      method:'POST',
+      headers,
+      body:JSON.stringify({system,userMsg})
+    });
+    if(res.ok){
+      const d=await res.json();
+      if(!d.error){
+        const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+        if(txt)return txt;
+      }
+    }
+  }catch(e){}
 
-  // 嘗試順序：Vercel API → 直接呼叫（claude.ai 環境）
-  const attempts = isVercel
-    ? [vercelEndpoint, 'https://api.anthropic.com/v1/messages']
-    : ['https://api.anthropic.com/v1/messages'];
+  // 備援：直接呼叫（claude.ai 環境下有效）
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers,
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:1000,
+        system,
+        messages:[{role:'user',content:userMsg}]
+      })
+    });
+    if(res.ok){
+      const d=await res.json();
+      if(!d.error){
+        const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+        if(txt)return txt;
+      }
+    }
+  }catch(e){}
 
-  for(const url of attempts){
-    try{
-      const isVercelApi = url === vercelEndpoint;
-      const fetchOptions = isVercelApi
-        ? {method:'POST', headers, body}
-        : {method:'POST', headers:{...headers}, body:JSON.stringify({
-            model:'claude-haiku-4-5-20251001',
-            max_tokens:1000,
-            system,
-            messages:[{role:'user',content:userMsg}]
-          })};
-
-      const res = await fetch(url, fetchOptions);
-      if(!res.ok) continue;
-      const d = await res.json();
-      if(d.error) continue;
-      const txt = (d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
-      if(txt) return txt;
-    }catch(e){}
-  }
   throw new Error('API_UNAVAILABLE');
 }
 
