@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -7,9 +7,16 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(401).json({ error: 'ANTHROPIC_API_KEY not set' });
+  if (!apiKey) return res.status(401).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
-  const { system, userMsg, model, max_tokens } = req.body;
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch(e) {}
+  }
+
+  const { system, userMsg, model, max_tokens } = body || {};
+
+  if (!userMsg) return res.status(400).json({ error: 'Missing userMsg' });
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -22,11 +29,10 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: model || 'claude-haiku-4-5-20251001',
         max_tokens: max_tokens || 1000,
-        system: system,
+        system: system || '',
         messages: [{ role: 'user', content: userMsg }]
       })
     });
-
     const data = await response.json();
     return res.status(response.status).json(data);
   } catch (error) {
