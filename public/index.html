@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>台股分析站 v3</title>
+<title>台股分析站 v4</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -192,8 +192,9 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
   <div class="sidebar-logo">
     <div class="logo-icon">📈</div>
     <div>
-      <div class="logo-text">台股分析站</div>
+      <div class="logo-text">台股分析站 <span style="font-size:11px;color:var(--text3);">v4</span></div>
       <div class="logo-sub">Yahoo Finance · 延遲15分鐘</div>
+      <div id="marketBadge" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 7px;border-radius:4px;margin-top:2px;background:rgba(70,80,104,.15);color:var(--text3);border:1px solid var(--border2);">⚫ 盤前</div>
     </div>
   </div>
 
@@ -215,6 +216,8 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
     <button class="stock-btn" onclick="quickSearch('2317')"><span>鴻海</span><span class="stock-btn-code">2317</span></button>
     <button class="stock-btn" onclick="quickSearch('2454')"><span>聯發科</span><span class="stock-btn-code">2454</span></button>
     <button class="stock-btn" onclick="quickSearch('2382')"><span>廣達</span><span class="stock-btn-code">2382</span></button>
+    <button class="stock-btn" onclick="quickSearch('3017')"><span>奇鋐</span><span class="stock-btn-code">3017</span></button>
+    <button class="stock-btn" onclick="quickSearch('6669')"><span>緯穎</span><span class="stock-btn-code">6669</span></button>
     <button class="stock-btn" onclick="quickSearch('2412')"><span>中華電</span><span class="stock-btn-code">2412</span></button>
     <button class="stock-btn" onclick="quickSearch('0050')"><span>元大台灣50</span><span class="stock-btn-code">0050</span></button>
     <button class="stock-btn" onclick="quickSearch('2308')"><span>台達電</span><span class="stock-btn-code">2308</span></button>
@@ -222,6 +225,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
     <button class="stock-btn" onclick="quickSearch('2002')"><span>中鋼</span><span class="stock-btn-code">2002</span></button>
     <button class="stock-btn" onclick="quickSearch('2891')"><span>中信金</span><span class="stock-btn-code">2891</span></button>
     <button class="stock-btn" onclick="quickSearch('3711')"><span>日月光</span><span class="stock-btn-code">3711</span></button>
+    <button class="stock-btn" onclick="quickSearch('00878')"><span>國泰永續高息</span><span class="stock-btn-code">00878</span></button>
   </div>
   <div class="spanel" id="spanel-limitup">
     <div class="lu-loading" id="limitUpList">點擊「漲停 🔥」載入</div>
@@ -241,8 +245,14 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 <main class="main" id="mainArea">
   <div class="welcome" id="welcomeState">
     <div class="welcome-icon">📊</div>
-    <h2>台股個股分析</h2>
-    <p>從左側選擇股票，或輸入股票代號開始查詢。<br>提供即時報價、K線圖、相關新聞、族群股，以及 AI 綜合進場評估。</p>
+    <h2>台股個股分析站 v4</h2>
+    <p>從左側選擇股票，或輸入股票代號開始查詢。<br>提供即時報價、K線圖、三大法人籌碼、AI 綜合進場評估。</p>
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:4px;">
+      <span onclick="quickSearch('2330')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:5px 13px;font-size:12px;color:var(--text3);cursor:pointer;">台積電 2330</span>
+      <span onclick="quickSearch('2454')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:5px 13px;font-size:12px;color:var(--text3);cursor:pointer;">聯發科 2454</span>
+      <span onclick="quickSearch('2382')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:5px 13px;font-size:12px;color:var(--text3);cursor:pointer;">廣達 2382</span>
+      <span onclick="quickSearch('0050')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:5px 13px;font-size:12px;color:var(--text3);cursor:pointer;">元大台灣50</span>
+    </div>
   </div>
 </main>
 
@@ -554,44 +564,37 @@ async function fetchNews(id,name){
 }
 
 // ─── AI via Anthropic API ───
+// ✅ v4 修復：Vercel proxy 優先（API Key 安全存在伺服器端），備援直接呼叫
 async function callClaude(system,userMsg){
   const headers={'Content-Type':'application/json'};
+  const isDeployed=window.location.hostname!=='localhost'&&!window.location.protocol.startsWith('file');
 
-  // 先嘗試 Vercel 後端 API（/api/claude）
-  try{
-    const res=await fetch('/api/claude',{
-      method:'POST',
-      headers,
-      body:JSON.stringify({system,userMsg})
-    });
-    if(res.ok){
-      const d=await res.json();
-      if(!d.error){
-        const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
-        if(txt)return txt;
+  // 1) Vercel serverless proxy（正式部署環境）
+  if(isDeployed){
+    try{
+      const res=await fetch('/api/claude',{
+        method:'POST',headers,
+        body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,system,userMsg})
+      });
+      if(res.ok){
+        const d=await res.json();
+        if(!d.error){
+          const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+          if(txt)return txt;
+        }
+        if(res.status===401)console.warn('[台股分析站] Vercel 401 — 請至 Vercel 設定 ANTHROPIC_API_KEY 環境變數後重新部署');
       }
-    }
-  }catch(e){}
+    }catch(e){}
+  }
 
-  // 備援：直接呼叫（claude.ai 環境下有效）
+  // 2) 備援：直接呼叫（在 claude.ai 環境中有效）
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers,
-      body:JSON.stringify({
-        model:'claude-haiku-4-5-20251001',
-        max_tokens:1000,
-        system,
-        messages:[{role:'user',content:userMsg}]
-      })
+      headers:{...headers,'anthropic-version':'2023-06-01'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,system,messages:[{role:'user',content:userMsg}]})
     });
-    if(res.ok){
-      const d=await res.json();
-      if(!d.error){
-        const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
-        if(txt)return txt;
-      }
-    }
+    if(res.ok){const d=await res.json();if(!d.error){const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();if(txt)return txt;}}
   }catch(e){}
 
   throw new Error('API_UNAVAILABLE');
@@ -609,7 +612,7 @@ function quickSearch(id){
 function searchStock(id){
   const raw=(id||document.getElementById('stockInput').value).trim().replace(/\s.*/,'');
   if(!raw)return;
-  CUR=raw;CANDLES=[];QUOTE_DATA=null;NEWS_DATA=[];nextDayCache={};
+  CUR=raw;CANDLES=[];QUOTE_DATA=null;NEWS_DATA=[];nextDayCache={};CHIPS_DATA=null;
   renderMainLayout(raw);
 }
 
@@ -630,6 +633,7 @@ function renderMainLayout(id){
   <div class="section">
     <div class="inner-tabs">
       <button class="itab active" onclick="switchITab('kline')">K 線圖</button>
+      <button class="itab" onclick="switchITab('chips')">📊 籌碼分析</button>
       <button class="itab" onclick="switchITab('news')">近期新聞</button>
       <button class="itab" onclick="switchITab('related')">同類個股</button>
       <button class="itab" onclick="switchITab('supplychain')">供應鏈</button>
@@ -653,6 +657,7 @@ function renderMainLayout(id){
       </div>
       <div class="kline-hint">▲紅=看多　▼綠=看空　滑鼠移至標籤可見說明　·　AI技術分析僅供參考，不構成投資建議</div>
     </div>
+    <div class="ipanel" id="ipanel-chips"><div id="chipsArea"><div class="loading-box"><div class="spinner"></div>切換至此頁籤後自動載入籌碼資料…</div></div></div>
     <div class="ipanel" id="ipanel-news">
       <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
         <button class="pbtn" onclick="reloadNews()">重新整理</button>
@@ -704,9 +709,10 @@ function renderMainLayout(id){
 }
 
 function switchITab(t){
-  document.querySelectorAll('.itab').forEach((b,i)=>b.classList.toggle('active',['kline','news','related','supplychain','nextday'][i]===t));
+  document.querySelectorAll('.itab').forEach((b,i)=>b.classList.toggle('active',['kline','chips','news','related','supplychain','nextday'][i]===t));
   document.querySelectorAll('.ipanel').forEach(p=>p.classList.remove('active'));
   document.getElementById('ipanel-'+t).classList.add('active');
+  if(t==='chips'&&CUR&&QUOTE_DATA)renderChips(CUR,QUOTE_DATA,CANDLES);
   if(t==='supplychain'&&CUR)renderSupplyChain(CUR);
   if(t==='nextday'&&CUR&&QUOTE_DATA)runNextDayPrediction(CUR,QUOTE_DATA,CANDLES,NEWS_DATA);
 }
@@ -2209,7 +2215,67 @@ async function loadWinRate(){
   </div>`;
 }
 
-// ─── Error / misc ───
+// ─── Global state ───
+let CHIPS_DATA=null;
+
+// Market status badge
+function updateMarketBadge(){const b=document.getElementById('marketBadge');if(!b)return;const now=new Date();const day=now.getDay();const h=now.getHours(),m=now.getMinutes();const t=h*100+m;if(day===0||day===6){b.style.background='rgba(70,80,104,.15)';b.style.color='var(--text3)';b.style.border='1px solid var(--border2)';b.textContent='⚫ 休市';return;}if(t>=900&&t<=1330){b.style.background='rgba(29,184,112,.12)';b.style.color='#4ade80';b.style.border='1px solid rgba(29,184,112,.25)';b.textContent='🟢 交易中';}else if(t>830&&t<900){b.style.background='rgba(240,160,48,.1)';b.style.color='var(--gold)';b.style.border='1px solid rgba(240,160,48,.25)';b.textContent='🟡 盤前';}else if(t>1330&&t<=1400){b.style.background='rgba(240,160,48,.1)';b.style.color='var(--gold)';b.style.border='1px solid rgba(240,160,48,.25)';b.textContent='🟡 盤後資訊';}else{b.style.background='rgba(70,80,104,.15)';b.style.color='var(--text3)';b.style.border='1px solid var(--border2)';b.textContent='⚫ 休市';}}
+updateMarketBadge();setInterval(updateMarketBadge,30000);
+
+// ─── 三大法人籌碼（台灣證交所） ───
+async function fetchInstitutional(id){
+  const urls=['https://www.twse.com.tw/rwd/zh/fund/T86?response=json&selectType=ALLBUT0999',...CP.map(p=>p('https://www.twse.com.tw/rwd/zh/fund/T86?response=json&selectType=ALLBUT0999'))];
+  for(const u of urls){try{const r=await fetch(u,{headers:{Accept:'application/json'}});if(!r.ok)continue;const d=await r.json();if(!d?.data||!Array.isArray(d.data))continue;const row=d.data.find(r=>r[0]===id);if(!row)return null;const p=v=>parseInt((v||'0').replace(/,/g,''),10)||0;return{date:d.date||'最新',foreign:{buy:p(row[2]),sell:p(row[3]),net:p(row[4])},trust:{buy:p(row[5]),sell:p(row[6]),net:p(row[7])},dealer:{buy:p(row[8]),sell:p(row[9]),net:p(row[10])},total:p(row[11]),source:'twse'};}catch(e){}}
+  return null;
+}
+
+// ─── 融資融券 ───
+async function fetchMargin(id){
+  const today=new Date();
+  for(let back=0;back<5;back++){const d=new Date(today);d.setDate(d.getDate()-back);if(d.getDay()===0||d.getDay()===6)continue;const dateStr=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;const url=`https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?response=json&date=${dateStr}&selectType=ALL`;for(const u of[url,...CP.map(p=>p(url))]){try{const r=await fetch(u);if(!r.ok)continue;const data=await r.json();if(!data?.tables||!data.tables[0]?.data)continue;const rows=data.tables[0].data;const row=rows.find(r=>r[0]===id);if(!row)continue;const p=v=>parseInt((v||'0').replace(/,/g,''),10)||0;return{date:dateStr,marginBuy:p(row[2]),marginSell:p(row[3]),marginBalance:p(row[5]),marginChange:p(row[6]),shortSell:p(row[8]),shortBuy:p(row[9]),shortBalance:p(row[11]),shortChange:p(row[12]),source:'twse'};}catch(e){}}}
+  return null;
+}
+
+function fmn(n){if(n==null||isNaN(+n))return'—';const v=+n;if(Math.abs(v)>=1000)return(v/1000).toFixed(0)+'K';return v.toLocaleString();}
+
+// ─── 籌碼分析 UI ───
+async function renderChips(id,q,candles){
+  const el=document.getElementById('chipsArea');if(!el)return;
+  if(CHIPS_DATA!==null&&CHIPS_DATA!==undefined){renderChipsUI(id,q,candles,CHIPS_DATA);return;}
+  el.innerHTML='<div class="loading-box"><div class="spinner"></div>載入三大法人、融資融券資料…<br><span style="font-size:11px;color:var(--text3);">來源：台灣證券交易所</span></div>';
+  const[inst,margin]=await Promise.all([fetchInstitutional(id).catch(()=>null),fetchMargin(id).catch(()=>null)]);
+  CHIPS_DATA={inst,margin};renderChipsUI(id,q,candles,CHIPS_DATA);
+}
+
+function renderChipsUI(id,q,candles,data){
+  const el=document.getElementById('chipsArea');if(!el)return;
+  const inst=data.inst,margin=data.margin;const price=q.regularMarketPrice;
+  const statusHtml=`<div style="display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:3px 9px;border-radius:4px;margin-bottom:10px;${inst||margin?'background:rgba(29,184,112,.1);color:#4ade80;border:1px solid rgba(29,184,112,.25);':'background:rgba(240,160,48,.1);color:var(--gold);border:1px solid rgba(240,160,48,.25);'}">${inst||margin?'✅ 資料已載入（台灣證交所）':'⚠️ 即時資料無法載入，顯示技術估算'}</div>`;
+  let instHtml='';
+  if(inst){
+    const total=inst.total;const tc=total>0?'var(--up)':'var(--down)';const maxAbs=Math.max(Math.abs(inst.foreign.net),Math.abs(inst.trust.net),Math.abs(inst.dealer.net),1);const pctBar=v=>Math.min(100,Math.abs(v)/maxAbs*100);
+    instHtml=`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:13px;padding:15px;margin-bottom:12px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;"><div style="font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;">三大法人買賣超</div><div style="font-size:11px;color:var(--text3);">${inst.date}</div></div><div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${tc};margin-bottom:12px;">${total>0?'+':''}${fmn(total)} 張　${total>0?'↑ 淨買超':'↓ 淨賣超'}</div>${[{label:'外資及陸資',data:inst.foreign,color:'#7c7ff7'},{label:'投信',data:inst.trust,color:'#4ade80'},{label:'自營商',data:inst.dealer,color:'#fbbf24'}].map(({label,data,color})=>{const net=data.net;const up=net>0;return`<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:11px;color:var(--text3);">${label}</span><span style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;color:${up?'var(--up)':'var(--down)'};">${net>0?'+':''}${fmn(net)}</span></div><div style="height:4px;background:var(--border2);border-radius:3px;overflow:hidden;"><div style="width:${pctBar(net)}%;height:100%;background:${up?color:'#ef4444'};border-radius:3px;opacity:.8;"></div></div></div>`;}).join('')}</div>`;
+  }else{
+    let vr=1,recentUp=0,recentUpVol=0,recentDnVol=0;
+    if(candles.length>=20){const avgV=candles.slice(-20,-3).reduce((a,c)=>a+(c.v||0),0)/17;const recV=candles.slice(-3).reduce((a,c)=>a+(c.v||0),0)/3;vr=avgV>0?recV/avgV:1;recentUp=candles.slice(-5).filter((c,i,a)=>i>0&&c.c>a[i-1].c).length;recentUpVol=candles.slice(-5).filter(c=>c.c>c.o).reduce((a,c)=>a+(c.v||0),0);recentDnVol=candles.slice(-5).filter(c=>c.c<=c.o).reduce((a,c)=>a+(c.v||0),0);}
+    const dir=vr>1.3?(recentUpVol>recentDnVol?'量增收紅，偏向買方':'量增收黑，偏向賣方'):'成交量正常';
+    instHtml=`<div style="background:var(--bg3);border:1px dashed var(--border2);border-radius:13px;padding:15px;margin-bottom:12px;"><div style="font-size:12px;color:var(--text3);margin-bottom:9px;">⚠️ 三大法人資料暫時無法取得，以量能估算：</div><div style="font-size:13px;color:var(--text2);line-height:1.8;">近3日量能比均量：<strong style="color:${vr>1.3?'var(--up)':vr<0.7?'var(--text3)':'var(--text)'}">${vr.toFixed(1)}x</strong><br>${vr>1.3?`🔺 放量，${dir}`:vr<0.7?'🔻 縮量，觀望氣氛濃':'🔵 量能正常'}<br>近5日收漲：<strong>${recentUp} / 5</strong> 日</div></div>`;
+  }
+  let marginHtml='';
+  if(margin){
+    const marginRatio=margin.marginBalance>0?(margin.shortBalance/margin.marginBalance*100):0;
+    marginHtml=`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:13px;padding:15px;margin-bottom:12px;"><div style="font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">融資 / 融券　<span style="font-size:10px;color:var(--text3);text-transform:none;">${margin.date}</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;"><div style="background:var(--bg4);border:1px solid var(--border);border-radius:11px;padding:12px;"><div style="font-size:11px;color:var(--text3);margin-bottom:5px;">融資餘額</div><div style="font-size:17px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--up);">${fmn(margin.marginBalance)}</div><div style="font-size:10px;color:${margin.marginChange>0?'var(--up)':margin.marginChange<0?'var(--down)':'var(--text3)'};margin-top:3px;">${margin.marginChange>=0?'↑+':'↓'}${fmn(margin.marginChange)} 張</div></div><div style="background:var(--bg4);border:1px solid var(--border);border-radius:11px;padding:12px;"><div style="font-size:11px;color:var(--text3);margin-bottom:5px;">融券餘額</div><div style="font-size:17px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--down);">${fmn(margin.shortBalance)}</div><div style="font-size:10px;color:${margin.shortChange>0?'var(--up)':margin.shortChange<0?'var(--down)':'var(--text3)'};margin-top:3px;">${margin.shortChange>=0?'↑+':'↓'}${fmn(margin.shortChange)} 張</div></div><div style="background:var(--bg4);border:1px solid var(--border);border-radius:11px;padding:12px;"><div style="font-size:11px;color:var(--text3);margin-bottom:5px;">券資比</div><div style="font-size:17px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${marginRatio>20?'var(--up)':'var(--text)'};">${marginRatio.toFixed(1)}%</div><div style="font-size:10px;color:var(--text3);margin-top:3px;">${marginRatio>30?'🔺 偏高注意':marginRatio>15?'🟡 中等':'🟢 偏低安全'}</div></div></div><div style="font-size:10px;color:var(--text3);line-height:1.7;">融資買進 ${fmn(margin.marginBuy)} / 賣出 ${fmn(margin.marginSell)}　·　融券賣出 ${fmn(margin.shortSell)} / 買進 ${fmn(margin.shortBuy)}</div></div>`;
+  }else{marginHtml=`<div style="background:var(--bg3);border:1px dashed var(--border2);border-radius:13px;padding:13px;margin-bottom:12px;"><div style="font-size:12px;color:var(--text3);">⚠️ 融資融券資料暫時無法取得（可能為假日或盤前）</div></div>`;}
+  let volHtml='';
+  if(candles.length>=5){
+    const recentCandles=candles.slice(-10);const maxVol=Math.max(...recentCandles.map(x=>x.v||0))||1;
+    const rows=recentCandles.map((c,i)=>{const up=c.c>=c.o;const date=`${c.t.getMonth()+1}/${c.t.getDate()}`;const chgPct=recentCandles[i-1]?((c.c-recentCandles[i-1].c)/recentCandles[i-1].c*100):0;const vol=c.v||0;const volPct=vol/maxVol*100;return`<tr><td style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text3);padding:4px 8px;">${date}</td><td style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${up?'var(--up)':'var(--down)'};padding:4px 8px;">${up?'▲':'▼'}${Math.abs(chgPct).toFixed(2)}%</td><td style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text2);padding:4px 8px;">${fmn(vol)}</td><td style="padding:4px 8px;min-width:70px;"><div style="height:6px;width:${volPct.toFixed(0)}%;background:${up?'rgba(240,74,88,.5)':'rgba(29,184,112,.5)'};border-radius:3px;min-width:2px;"></div></td></tr>`;}).join('');
+    volHtml=`<div><div style="font-size:12px;color:var(--text2);font-weight:500;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;">近10日量價關係</div><table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--border);"><th style="font-size:10px;color:var(--text3);text-align:left;padding:4px 8px;">日期</th><th style="font-size:10px;color:var(--text3);text-align:left;padding:4px 8px;">漲跌</th><th style="font-size:10px;color:var(--text3);text-align:left;padding:4px 8px;">成交量</th><th style="font-size:10px;color:var(--text3);text-align:left;padding:4px 8px;min-width:70px;">量能圖</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  el.innerHTML=`${statusHtml}${instHtml}${marginHtml}${volHtml}<div style="font-size:10px;color:var(--text3);line-height:1.6;margin-top:8px;">⚠️ 三大法人與融資融券資料來源：台灣證券交易所，僅供參考，不構成投資建議。<br><span style="cursor:pointer;color:var(--accent2);" onclick="CHIPS_DATA=null;renderChips('${id}',QUOTE_DATA,CANDLES)">↺ 重新載入</span></div>`;
+}
+
+// ─── Error handler ───
 function showError(id){
   const qs=document.getElementById('quoteSection');
   if(qs)qs.innerHTML=`<div class="error-box">❌ 無法取得 <strong>${id}</strong> 的資料。請確認代號正確，並確保 Allow CORS 擴充套件已啟用。</div>`;
