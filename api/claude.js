@@ -5,8 +5,8 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(401).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  const apiKey = process.env.ANTHROPIC_api_KEY;
+  if (!apiKey) return res.status(401).json({ error: 'ANTHROPIC_api_KEY not configured' });
 
   let body = req.body;
   if (typeof body === 'string') {
